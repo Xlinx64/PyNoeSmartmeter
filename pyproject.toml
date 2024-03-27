@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "pynoesmartmeter"
+version = "0.1.0"
+description = "Python library to access the Netz Nö (EVN) Smart Meter private API"
+authors = ["David Illichmann <david.illichmann@ebcont.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+requests = "^2.31.0"
+
+[tool.poetry.group.dev.dependencies]
+requests = "^2.31.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

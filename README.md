@@ -13,14 +13,14 @@
 
 Install with pip:
 
-`pip install noe-smartmeter`
+`pip install pynoesmartmeter`
 
 ## How To Use
 
 Import the Smartmeter client, provide login information and access available api functions:
 
 ```python
-from noe_smartmeter import Smartmeter
+from pynoesmartmeter import Smartmeter
 
 username = 'YOUR_LOGIN_USER_NAME'
 password = 'YOUR_PASSWORD'
