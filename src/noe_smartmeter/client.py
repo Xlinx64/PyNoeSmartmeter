@@ -32,11 +32,11 @@ class Smartmeter:
         self._username = username
         self._password = password
 
-        self._authenticate(username, password)
+        self.authenticate(username, password)
         self._retrieve_user_data()
 
 
-    def _authenticate(self, username, password):
+    def authenticate(self, username, password):
         session = None
         session_file='noe_smartmeter_session.pkl'
         
@@ -70,14 +70,15 @@ class Smartmeter:
                 pickle.dump(session, f)
 
         self._session = session        
-        return self
+        return True
+
     
     def _call_api(self, url, params = None):
         retry_count = 0 
         while retry_count < 1:
             response = self._session.get(url, params=params)
             if response.status_code == 401:
-                self._authenticate(self._username, self._password)
+                self.authenticate(self._username, self._password)
                 retry_count += 1
             elif response.status_code == 200:
                 return response
