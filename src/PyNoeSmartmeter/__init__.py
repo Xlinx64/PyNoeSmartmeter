@@ -1,4 +1,5 @@
 """Unofficial Python wrapper for the Netz Noe Smart Meter private API."""
+
 try:
     from importlib.metadata import version
 except ModuleNotFoundError:
@@ -12,4 +13,3 @@ except Exception:  # noqa
     pass
 
 __all__ = ["Smartmeter"]
-
