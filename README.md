@@ -4,7 +4,6 @@
 <h4 align="center">An unofficial python wrapper for the <a href="https://smartmeter.netz-noe.at/#/" target="_blank">EVN - Netz Niederösterreich</a> private API.
 </h4>
 
------
 <h2>
   WARNING: This library is still work in progress and might change a lot!
   This project will be used in a home assistant integration. 
