@@ -4,10 +4,19 @@
 <h4 align="center">An unofficial python wrapper for the <a href="https://smartmeter.netz-noe.at/#/" target="_blank">EVN - Netz Niederösterreich</a> private API.
 </h4>
 
+-----
+<h2>
+  WARNING: This library is still work in progress and might change a lot!
+  This project will be used in a home assistant integration. 
+</h2>
+
+
 ## Features
 
 - Access energy usage
 - Get user & meter information
+
+This library is currently written for asynchronous use. There might be a synchronous version in the future.
 
 ## Installation
 
@@ -27,8 +36,11 @@ password = 'YOUR_PASSWORD'
 
 offset = 0
 
-api = Smartmeter(username, password)
-print(api.get_consumption_since_date("10.09.2023 12:17",offset))
+api = Smartmeter(USERNAME, PASSWORD)
+loop = asyncio.get_event_loop()
+coroutine = api.get_consumption_since_date("24.03.2024 10:03", offset)
+loop.run_until_complete(coroutine)
+
 ```
 
 

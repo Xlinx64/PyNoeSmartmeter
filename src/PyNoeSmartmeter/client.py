@@ -27,17 +27,14 @@ class Smartmeter:
 
     def __init__(self, username, password):
         """Access the Smartmeter API."""
-        self._supports_api = False
+        self.supports_api = False
         self._metering_point_id = None
         self._account_id = None
         self._session = None
         self._username = username
         self._password = password
 
-        self.authenticate(username, password)
-        self._retrieve_user_data()
-
-    def authenticate(self, username, password):
+    async def authenticate(self, username, password):
         """Load session file or authenticate user."""
         session = None
         session_file = "noe_smartmeter_session.pkl"
@@ -76,57 +73,65 @@ class Smartmeter:
         self._session = session
         return True
 
-    def _call_api(self, url, params=None):
+    async def _call_api(self, url, params=None):
+        if self._session is None:
+            await self.authenticate(self._username, self._password)
         retry_count = 0
         while retry_count < 1:
             response = self._session.get(url, params=params)
             if response.status_code == 401:
-                self.authenticate(self._username, self._password)
+                await self.authenticate(self._username, self._password)
                 retry_count += 1
             elif response.status_code == 200:
                 return response
 
-    def _retrieve_user_data(self):
-        accounting_details = self.get_accounting_details()
-        meter_details = self.get_meter_details(accounting_details["accountId"])
+    async def get_user_details(self):
+        """Load user details"""
+        response = await self._call_api(self.API_USER_DETAILS_URL + "?context=2")
+        return response.json()[0]
 
-        has_smartmeter = accounting_details["hasSmartMeter"]
-        has_electricity = accounting_details["hasElectricity"]
-        has_communicative = accounting_details["hasCommunicative"]
-        has_active = accounting_details["hasActive"]
+    async def get_accounting_details(self):
+        """Load accounting details"""
+        response = await self._call_api(self.API_ACCOUNTING_DETAILS_URL + "?context=2")
+        entry = response.json()[0]
 
-        self._supports_api = (
+        has_smartmeter = entry["hasSmartMeter"]
+        has_electricity = entry["hasElectricity"]
+        has_communicative = entry["hasCommunicative"]
+        has_active = entry["hasActive"]
+        self.supports_api = (
             has_smartmeter and has_electricity and has_communicative and has_active
         )
-        self._metering_point_id = meter_details["meteringPointId"]
-        self._account_id = accounting_details["accountId"]
 
-    def get_user_details(self):
-        """Load user details"""
-        response = self._call_api(self.API_USER_DETAILS_URL + "?context=2")
-        return response.json()[0]
+        self._account_id = entry["accountId"]
+        return entry
 
-    def get_meter_details(self, account_id):
+    async def get_meter_details(self):
         """Load meter details"""
-        response = self._call_api(
-            self.API_METER_DETAILS_URL + "?context=2&accountId=" + account_id
+        if self._account_id is None:
+            await self.get_accounting_details()
+        response = await self._call_api(
+            self.API_METER_DETAILS_URL
+            + "?context=2&accountId="
+            + (self._account_id or "")
         )
-        return response.json()[0]
+        entry = response.json()[0]
 
-    def get_accounting_details(self):
-        """Load accounting details"""
-        response = self._call_api(self.API_ACCOUNTING_DETAILS_URL + "?context=2")
-        return response.json()[0]
+        self._metering_point_id = entry["meteringPointId"]
 
-    def get_consumption_per_day(self, day):
+        return entry
+
+    async def get_consumption_per_day(self, day):
         """Load consumption for one day"""
         print(f"Load consumption for day {day}")
+        if self._metering_point_id is None:
+            await self.get_meter_details()
         try:
-            response = self._call_api(
+            response = await self._call_api(
                 self.API_CONSUMPTION_URL + "/Day",
                 params={"meterId": self._metering_point_id, "day": day},
             )
-            data = response.json()
+            data = response.json()[0]
             consumption_per_day = list(
                 zip(data["peakDemandTimes"], data["meteredValues"])
             )
@@ -135,11 +140,13 @@ class Smartmeter:
             print(f"An error occurred: {error}")
             return []
 
-    def get_consumption_for_month(self, year, month):
+    async def get_consumption_for_month(self, year, month):
         """Load consumption for one month"""
         print(f"Load consumption for month {month}/{year}")
+        if self._metering_point_id is None:
+            await self.get_meter_details()
         try:
-            response = self._call_api(
+            response = await self._call_api(
                 self.API_CONSUMPTION_URL + "/Month",
                 params={
                     "meterId": self._metering_point_id,
@@ -147,7 +154,7 @@ class Smartmeter:
                     "month": month,
                 },
             )
-            data = response.json()
+            data = response.json()[0]
             consumption_for_month = list(
                 zip(data["peakDemandTimes"], data["meteredValues"])
             )
@@ -156,23 +163,25 @@ class Smartmeter:
             print(f"An error occurred: {error}")
             return []
 
-    def get_consumption_for_year(self, year):
+    async def get_consumption_for_year(self, year):
         """Load consumption for one year"""
         print("Load consumption for year:", year)
+        if self._metering_point_id is None:
+            await self.get_meter_details()
         try:
-            response = self._call_api(
+            response = await self._call_api(
                 self.API_CONSUMPTION_URL + "/Year",
                 params={"meterId": self._metering_point_id, "year": year},
             )
             response.raise_for_status()  # Raise an exception if the response contains an HTTP error status code
-            data = response.json()
+            data = response.json()[0]
             consumption_for_year = list(zip(data["peakDemandTimes"], data["values"]))
             return consumption_for_year
         except (requests.exceptions.RequestException, ValueError) as error:
             print(f"An error occurred: {error}")
             return []
 
-    def get_consumption_since_date(self, input_date_string, offset):
+    async def get_consumption_since_date(self, input_date_string, offset):
         """Load consumption since a specific datetime and adds the offset"""
         current_date = datetime.date.today()
         input_date = datetime.datetime.strptime(input_date_string, "%d.%m.%Y %H:%M")
@@ -183,14 +192,16 @@ class Smartmeter:
             return (input_date_string, offset)
 
         # Add up day consumption after input time (hours)
-        day_data = self.get_consumption_per_day(input_date.strftime("%Y-%m-%d"))
+        day_data = await self.get_consumption_per_day(input_date.strftime("%Y-%m-%d"))
         for time, consumption in day_data:
             formatted_time = datetime.datetime.strptime(time, "%Y-%m-%dT%H:%M:%S")
             if formatted_time > input_date:
                 energy_sum += consumption
 
         # Add up the rest of the month consumption after input date (days)
-        month_data = self.get_consumption_for_month(input_date.year, input_date.month)
+        month_data = await self.get_consumption_for_month(
+            input_date.year, input_date.month
+        )
         energy_sum += sum(
             value[1] for value in month_data[input_date.day :] if value[1] is not None
         )
@@ -200,7 +211,7 @@ class Smartmeter:
         end_index = 12
         if input_date.year == current_date.year:
             end_index = current_date.month - 1
-        year_data = self.get_consumption_for_year(input_date.year)
+        year_data = await self.get_consumption_for_year(input_date.year)
         energy_sum += sum(
             value[1]
             for value in year_data[start_index:end_index]
@@ -215,10 +226,11 @@ class Smartmeter:
                 else input_date.year
             )
             for year in range(start_year, current_date.year + 1):
-                year_values = self.get_consumption_for_year(year)
+                year_values = await self.get_consumption_for_year(year)
                 energy_sum += sum(
                     value[1] for value in year_values if value[1] is not None
                 )
 
         # It is assumed that the last datapoint is from the current date at 00:00 since the smartmeter only transmits data once a day
+        print(f"COnsumption until {current_date.strftime("%d.%m.%Y %H:%M")}: {energy_sum + offset}")
         return (current_date.strftime("%d.%m.%Y %H:%M"), energy_sum + offset)

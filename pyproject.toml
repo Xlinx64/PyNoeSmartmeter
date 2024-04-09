@@ -9,6 +9,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.12"
 requests = "^2.31.0"
+asyncio = "^3.4.3"
 
 [tool.poetry.group.dev.dependencies]
 requests = "^2.31.0"
