@@ -31,8 +31,8 @@ Import the Smartmeter client, provide login information and access available api
 import asyncio
 from pynoesmartmeter import Smartmeter
 
-username = 'YOUR_LOGIN_USER_NAME'
-password = 'YOUR_PASSWORD'
+USERNAME = 'YOUR_LOGIN_USER_NAME'
+PASSWORD = 'YOUR_PASSWORD'
 
 OFFSET = 0
 
