@@ -5,7 +5,8 @@ import logging
 import datetime
 import os
 import pickle
-import requests
+import httpx
+import aiofiles
 
 
 from .errors import SmartmeterLoginError, SmartmeterConnectionError
@@ -25,6 +26,8 @@ class Smartmeter:
 
     API_CONSUMPTION_URL = API_BASE_URL + "/ConsumptionRecord"
 
+    SESSION_FILE = "noe_smartmeter_session_httpx.pkl"
+
     def __init__(self, username, password):
         """Access the Smartmeter API."""
         self.supports_api = False
@@ -34,53 +37,71 @@ class Smartmeter:
         self._username = username
         self._password = password
 
-    async def authenticate(self, username, password):
+    async def authenticate(self, username = None, password = None):
         """Load session file or authenticate user."""
-        session = None
-        session_file = "noe_smartmeter_session.pkl"
+        if username is not None:
+            self._username = username
+        if password is not None:
+            self._password = password
 
-        # Check if a cached session exists
-        if os.path.exists(session_file):
-            with open(session_file, "rb") as f:
-                session = pickle.load(f)
-                # Check if the cached session is still valid
-                print("Check if stored Session is valid...")
-                response = session.get(self.API_USER_DETAILS_URL)
-                if response.status_code != 200:
-                    session = None
-                    print("Stored session is not valid")
-                    print("Reauthenticating...")
-                else:
-                    print("Stored session is valid")
+        if await self._load_check_session():
+           return True
 
-        # If a valid session doesn't exist, authenticate the user
-        if session is None:
-            session = requests.Session()
-            auth_data = {"user": username, "pwd": password}
-            response = session.post(self.AUTH_URL, json=auth_data)
-            if response.status_code == 200:
-                print("Authentication sucessful")
-            elif response.status_code == 401:
-                raise SmartmeterLoginError("Login failed. Check username/password.")
-            else:
-                raise SmartmeterConnectionError(
-                    f"Authentication failed with status {response.status_code}"
-                )
-            # Save the session to disk
-            with open(session_file, "wb") as f:
-                pickle.dump(session, f)
+        print("Starting new session and authenticate")
+        session = httpx.AsyncClient(timeout=30.0)
+        auth_data = {"user": self._username, "pwd": self._password}
+        response = await session.post(self.AUTH_URL, data=auth_data)
 
+        if response.status_code == 200:
+            print("Authentication sucessful")
+        elif response.status_code == 401:
+            raise SmartmeterLoginError("Login failed. Check username/password.")
+        else:
+            raise SmartmeterConnectionError(
+                f"Authentication failed with status {response.status_code}"
+            )
+        await self._save_session(session)
+        
         self._session = session
         return True
 
+    async def _check_session(self, session):
+        try:
+            response = await session.get(self.API_USER_DETAILS_URL)
+            return response.status_code == 200
+        except (TypeError) as error:
+            print(error)
+            return False
+
+    async def _save_session(self, session):
+        serialized_data = pickle.dumps(dict(session.cookies))
+        async with aiofiles.open(self.SESSION_FILE, "wb") as f:
+            await f.write(serialized_data)
+    
+    async def _load_check_session(self):
+        # Check if a cached session exists
+        print("Checking stored session")
+        if os.path.exists(self.SESSION_FILE):
+            async with aiofiles.open(self.SESSION_FILE, "rb") as f:
+                data = await f.read()
+                cookies = pickle.loads(data)
+                session = httpx.AsyncClient(timeout=30.0, cookies=cookies)
+                if await self._check_session(session):
+                    print("Stored Session is valid")
+                    self._session = session
+                    return True           
+        print("Session is not stored or invalid!")                
+        return False
+
+
     async def _call_api(self, url, params=None):
         if self._session is None:
-            await self.authenticate(self._username, self._password)
+            await self.authenticate()
         retry_count = 0
         while retry_count < 1:
-            response = self._session.get(url, params=params)
+            response = await self._session.get(url, params=params)
             if response.status_code == 401:
-                await self.authenticate(self._username, self._password)
+                await self.authenticate()
                 retry_count += 1
             elif response.status_code == 200:
                 return response
@@ -136,7 +157,7 @@ class Smartmeter:
                 zip(data["peakDemandTimes"], data["meteredValues"])
             )
             return consumption_per_day
-        except (requests.exceptions.RequestException, ValueError) as error:
+        except (httpx.RequestError, ValueError) as error:
             print(f"An error occurred: {error}")
             return []
 
@@ -159,7 +180,7 @@ class Smartmeter:
                 zip(data["peakDemandTimes"], data["meteredValues"])
             )
             return consumption_for_month
-        except (requests.exceptions.RequestException, ValueError) as error:
+        except (httpx.RequestError, ValueError) as error:
             print(f"An error occurred: {error}")
             return []
 
@@ -177,7 +198,7 @@ class Smartmeter:
             data = response.json()[0]
             consumption_for_year = list(zip(data["peakDemandTimes"], data["values"]))
             return consumption_for_year
-        except (requests.exceptions.RequestException, ValueError) as error:
+        except (httpx.RequestError, ValueError) as error:
             print(f"An error occurred: {error}")
             return []
 
@@ -232,5 +253,5 @@ class Smartmeter:
                 )
 
         # It is assumed that the last datapoint is from the current date at 00:00 since the smartmeter only transmits data once a day
-        print(f"COnsumption until {current_date.strftime("%d.%m.%Y %H:%M")}: {energy_sum + offset}")
+        print(f"Consumption until {current_date.strftime("%d.%m.%Y %H:%M")}: {energy_sum + offset}")
         return (current_date.strftime("%d.%m.%Y %H:%M"), energy_sum + offset)

@@ -28,6 +28,7 @@ Install with pip:
 Import the Smartmeter client, provide login information and access available api functions:
 
 ```python
+import asyncio
 from pynoesmartmeter import Smartmeter
 
 username = 'YOUR_LOGIN_USER_NAME'
@@ -36,9 +37,7 @@ password = 'YOUR_PASSWORD'
 offset = 0
 
 api = Smartmeter(USERNAME, PASSWORD)
-loop = asyncio.get_event_loop()
-coroutine = api.get_consumption_since_date("24.03.2024 10:03", offset)
-loop.run_until_complete(coroutine)
+asyncio.run(api.get_consumption_since_date("24.03.2024 10:03", offset))
 
 ```
 
