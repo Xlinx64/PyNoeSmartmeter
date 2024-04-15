@@ -34,10 +34,10 @@ from pynoesmartmeter import Smartmeter
 username = 'YOUR_LOGIN_USER_NAME'
 password = 'YOUR_PASSWORD'
 
-offset = 0
+OFFSET = 0
 
 api = Smartmeter(USERNAME, PASSWORD)
-asyncio.run(api.get_consumption_since_date("24.03.2024 10:03", offset))
+asyncio.run(api.get_consumption_since_date("24.03.2024 10:03", OFFSET))
 
 ```
 

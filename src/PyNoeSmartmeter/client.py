@@ -41,8 +41,10 @@ class Smartmeter:
         """Load session file or authenticate user."""
         if username is not None:
             self._username = username
+            await self._clear_stored_session()
         if password is not None:
             self._password = password
+            await self._clear_stored_session()
 
         if await self._load_check_session():
            return True
@@ -87,12 +89,16 @@ class Smartmeter:
                 cookies = pickle.loads(data)
                 session = httpx.AsyncClient(timeout=30.0, cookies=cookies)
                 if await self._check_session(session):
-                    print("Stored Session is valid")
+                    print("Stored session is valid")
                     self._session = session
                     return True           
         print("Session is not stored or invalid!")                
         return False
 
+    async def _clear_stored_session(self):
+        if os.path.exists(self.SESSION_FILE):
+            os.remove(self.SESSION_FILE)
+            print("Stored session deleted successfully.")
 
     async def _call_api(self, url, params=None):
         if self._session is None:
@@ -210,7 +216,7 @@ class Smartmeter:
 
         if current_date == input_date.date():
             print("The current date is to new. Returning input!")
-            return (input_date_string, offset)
+            return {"timestamp": input_date_string, "consumption": offset}
 
         # Add up day consumption after input time (hours)
         day_data = await self.get_consumption_per_day(input_date.strftime("%Y-%m-%d"))
@@ -254,4 +260,4 @@ class Smartmeter:
 
         # It is assumed that the last datapoint is from the current date at 00:00 since the smartmeter only transmits data once a day
         print(f"Consumption until {current_date.strftime("%d.%m.%Y %H:%M")}: {energy_sum + offset}")
-        return (current_date.strftime("%d.%m.%Y %H:%M"), energy_sum + offset)
+        return {"timestamp": current_date.strftime("%d.%m.%Y %H:%M"), "consumption": energy_sum + offset}
